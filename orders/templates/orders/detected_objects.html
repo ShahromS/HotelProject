@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Detected Objects - {{ restaurant.name }}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.2.4/fabric.min.js"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+      }
+
+      .container {
+        display: flex;
+        height: 100vh;
+      }
+
+      .image-container {
+        flex: 2;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+
+      .objects-panel {
+        flex: 1;
+        padding: 20px;
+        background: white;
+        box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+        overflow-y: auto;
+      }
+
+      .object-card {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .detected-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .header {
+        background: #2c3e50;
+        color: white;
+        padding: 1rem;
+        text-align: center;
+      }
+
+      .confidence-high {
+        color: #27ae60;
+      }
+      .confidence-medium {
+        color: #f39c12;
+      }
+      .confidence-low {
+        color: #c0392b;
+      }
+
+      .btn {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        background: #3498db;
+        color: white;
+        text-align: center;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        margin-top: 20px;
+      }
+
+      .btn:hover {
+        background: #2980b9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>{{ restaurant.name }} - Detected Objects</h1>
+    </div>
+
+    <div class="container">
+      <div class="image-container">
+        <canvas id="mainCanvas"></canvas>
+      </div>
+
+      <div class="objects-panel">
+        <h2>Detected Objects ({{ objects|length }})</h2>
+        <div id="objectsList"></div>
+        <a href="{% url 'orders:room_model' restaurant.id %}" class="btn"
+          >Go to 2D Room Model</a
+        >
+      </div>
+    </div>
+
+    <script>
+      const imageUrl = "{{ restaurant.layout_image.url }}";
+      const objects = {{ objects_json|safe }};
+
+      document.addEventListener('DOMContentLoaded', function() {
+          const canvas = new fabric.Canvas('mainCanvas', {
+              width: 800,
+              height: 600,
+              backgroundColor: '#ffffff'
+          });
+
+          fabric.Image.fromURL(imageUrl, function(img) {
+              const scale = Math.min(
+                  canvas.width / img.width,
+                  canvas.height / img.height
+              );
+
+              img.scale(scale);
+              canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+
+              objects.forEach(obj => {
+                  let shape;
+                  const color = obj.object_type === 'chair' ? '#e74c3c' : '#3498db';
+
+                  if (obj.object_type === 'chair') {
+                      shape = new fabric.Circle({
+                          left: obj.x_position * scale,
+                          top: obj.y_position * scale,
+                          radius: Math.min(obj.width, obj.height) * scale / 2,
+                          fill: 'transparent',
+                          stroke: color,
+                          strokeWidth: 2
+                      });
+                  } else {
+                      shape = new fabric.Rect({
+                          left: obj.x_position * scale,
+                          top: obj.y_position * scale,
+                          width: obj.width * scale,
+                          height: obj.height * scale,
+                          fill: 'transparent',
+                          stroke: color,
+                          strokeWidth: 2
+                      });
+                  }
+
+                  const label = new fabric.Text(obj.object_type, {
+                      left: obj.x_position * scale,
+                      top: (obj.y_position * scale) - 20,
+                      fontSize: 14,
+                      fill: color
+                  });
+
+                  canvas.add(shape);
+                  canvas.add(label);
+              });
+          });
+
+          const objectsList = document.getElementById('objectsList');
+          objects.forEach(obj => {
+              const confidence = obj.confidence * 100;
+              let confidenceClass = 'confidence-low';
+              if (confidence >= 80) confidenceClass = 'confidence-high';
+              else if (confidence >= 50) confidenceClass = 'confidence-medium';
+
+              const card = document.createElement('div');
+              card.className = 'object-card';
+              card.innerHTML = `
+                  <h3>${obj.object_type.toUpperCase()}</h3>
+                  <p class="${confidenceClass}">Confidence: ${confidence.toFixed(1)}%</p>
+                  <p>Position: (${Math.round(obj.x_position)}, ${Math.round(obj.y_position)})</p>
+                  <p>Size: ${Math.round(obj.width)}x${Math.round(obj.height)}</p>
+              `;
+              objectsList.appendChild(card);
+          });
+      });
+    </script>
+  </body>
+</html>
